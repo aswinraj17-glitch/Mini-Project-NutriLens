@@ -3,45 +3,43 @@ const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const path = require("path");
-
-const connectDB = require("./config/db");
-const errorHandler = require("./middleware/errorHandler");
-
-const authRoutes = require("./routes/authRoutes");
-const mealRoutes = require("./routes/mealRoutes");
-const nutritionRoutes = require("./routes/nutritionRoutes");
-const goalRoutes = require("./routes/goalRoutes");
-const suggestionRoutes = require("./routes/suggestionRoutes");
-const feedbackRoutes = require("./routes/feedbackRoutes");
+const mongoose = require("mongoose");
 
 const app = express();
 
-// DB
-connectDB();
-
-// Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || "*", credentials: true }));
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || "*", credentials: true }));
 app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
-// Static uploads
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.get("/", (_req, res) => res.json({ ok: true, name: "nutrisnap-backend" }));
 
-// Health
-app.get("/", (_req, res) => res.json({ ok: true, service: "NutriSnap AI API" }));
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/users", require("./routes/users"));
+app.use("/api/meals", require("./routes/meals"));
+app.use("/api/logs", require("./routes/logs"));
+app.use("/api/suggestions", require("./routes/suggestions"));
 
-// Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/meals", mealRoutes);
-app.use("/api/nutrition", nutritionRoutes);
-app.use("/api/goals", goalRoutes);
-app.use("/api/suggestions", suggestionRoutes);
-app.use("/api/feedback", feedbackRoutes);
-
-// 404 + error handler
-app.use((req, res) => res.status(404).json({ message: "Route not found" }));
-app.use(errorHandler);
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(err.status || 500).json({ message: err.message || "Server error" });
+});
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 NutriSnap API running on http://localhost:${PORT}`));
+const MONGO_URI = process.env.MONGO_URI;
+
+if (!MONGO_URI) {
+  console.error("Missing MONGO_URI in .env");
+  process.exit(1);
+}
+
+mongoose
+  .connect(MONGO_URI)
+  .then(() => {
+    console.log("MongoDB connected");
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  })
+  .catch((err) => {
+    console.error("MongoDB connection error:", err.message);
+    process.exit(1);
+  });
